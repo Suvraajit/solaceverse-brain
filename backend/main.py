@@ -9,26 +9,32 @@ import google.generativeai as genai
 from supabase import create_client, Client
 from pydantic import BaseModel
 
-# 1. SETUP & SECRETS
+# ==========================================
+# 1. CONFIGURATION & SECRETS
+# ==========================================
 load_dotenv()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 PEXELS_KEY = os.getenv("PEXELS_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+# Initialize Services
 genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-2.5-flash') # Flash is fastest for real-time apps
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
-# --- DATA MODELS ---
+# ==========================================
+# 2. DATA MODELS (Strict Typing)
+# ==========================================
 class JournalEntry(BaseModel):
     mood: str
     reflection: str
     ai_tag: str
     image_url: str = ""
-    date: str = "" # For Backdating
+    date: str = ""     # Optional: For Time Travel/Backdating
+    user_id: str       # REQUIRED: For Privacy/RLS
 
 class CopilotRequest(BaseModel):
     text: str
@@ -42,25 +48,27 @@ class HindsightRequest(BaseModel):
     past_text: str
     current_mood: str
 
-# --- HELPER: PEXELS IMAGE ---
+# ==========================================
+# 3. HELPER FUNCTIONS
+# ==========================================
 def get_dynamic_image(query_term):
+    """Fetches a high-quality image from Pexels efficiently."""
     if not PEXELS_KEY:
         return "https://images.unsplash.com/photo-1504197885-60974ceaf268"
     
-    url = f"https://api.pexels.com/v1/search?query={query_term}&per_page=1"
-    headers = {"Authorization": PEXELS_KEY}
-    
     try:
-        response = requests.get(url, headers=headers)
+        url = f"https://api.pexels.com/v1/search?query={query_term}&per_page=1"
+        headers = {"Authorization": PEXELS_KEY}
+        response = requests.get(url, headers=headers, timeout=5) # 5s timeout to prevent hanging
         data = response.json()
         if data.get('photos'):
             return data['photos'][0]['src']['large']
-        return "https://via.placeholder.com/600x400?text=No+Image"
     except:
-        return "https://via.placeholder.com/600x400?text=API+Error"
+        pass
+    return "https://via.placeholder.com/600x400?text=SolaceVerse"
 
-# --- HELPER: WEATHER DECODER ---
 def get_weather_desc(code):
+    """Converts WMO codes to human text."""
     if code == 0: return "Clear skies"
     if code in [1, 2, 3]: return "Cloudy"
     if code in [45, 48]: return "Foggy"
@@ -70,30 +78,31 @@ def get_weather_desc(code):
     return "Unknown weather"
 
 # ==========================================
-#              API ENDPOINTS
+# 4. API ENDPOINTS
 # ==========================================
 
 @app.get("/")
 def home():
-    return {"status": "SolaceVerse Brain Online", "version": "Final"}
+    return {"status": "SolaceVerse Brain is Online"}
 
-# 1. ANALYST MODE
+# --- ANALYST MODE (The Curator) ---
 @app.get("/mood")
 async def check_mood(text: str):
     try:
-        db_response = supabase.table("content_library").select("*").execute()
+        # Efficiency: Only fetch columns we need
+        db_response = supabase.table("content_library").select("id, title, vibe, type, content").execute()
         library_data = db_response.data
     except Exception as e:
         return {"error": f"Database Error: {str(e)}"}
 
+    # Minify library for token efficiency
     library_str = json.dumps(library_data)
 
     prompt = f"""
-    You are the AI Curator. User Feeling: "{text}"
+    Act as AI Curator. User Input: "{text}"
     1. Visual Search Term (3 words).
-    2. Nuanced Emotion Tag (3 words).
+    2. Emotion Tag (3 words).
     3. Pick best content ID from library.
-    
     Library: {library_str}
     Return JSON: {{ "visual_term": "...", "tag": "...", "recommendation_id": 1 }}
     """
@@ -105,6 +114,7 @@ async def check_mood(text: str):
         
         selected_content = next((item for item in library_data if item['id'] == ai_data['recommendation_id']), None)
         
+        # Lazy Load Image: Only fetch Pexels if we found content
         visual_term = ai_data.get("visual_term", "abstract")
         if selected_content:
             selected_content['image'] = get_dynamic_image(visual_term)
@@ -113,12 +123,13 @@ async def check_mood(text: str):
     except Exception as e:
         return {"error": str(e)}
 
-# 2. NIGHT SHIFT
+# --- NIGHT SHIFT (Storyteller) ---
 @app.get("/night-shift")
 async def night_shift_mode(text: str):
+    # Optimized Prompt for speed
     prompt = f"""
-    Write a soothing bedtime story (max 150 words) for anxiety about: "{text}".
-    No advice. Just a story resolving into peace.
+    Write a soothing bedtime story (max 100 words) for anxiety about: "{text}".
+    Use nature metaphors. No advice. Resolve into peace.
     """
     try:
         response = model.generate_content(prompt)
@@ -126,12 +137,13 @@ async def night_shift_mode(text: str):
     except:
         story_text = "The stars whispered that it would be okay..."
 
+    # Randomize visual theme
     themes = ["calm night sky", "starlight mountains", "soothing deep ocean", "dreamy forest", "aurora borealis"]
     image_url = get_dynamic_image(random.choice(themes))
 
     return {"story": story_text, "image": image_url}
 
-# 3. CO-PILOT JOURNAL
+# --- CO-PILOT JOURNAL (Living Background) ---
 @app.post("/copilot")
 async def copilot_analysis(data: CopilotRequest):
     text = data.text
@@ -139,14 +151,14 @@ async def copilot_analysis(data: CopilotRequest):
         return {"color": "0xFF121212", "nudge": ""}
 
     prompt = f"""
-    Analyze fragment: "{text}"
-    1. Pick a BACKGROUND color (Hex) to COUNTER-BALANCE the emotion:
-       - Anger -> COOL TEAL (0xFF004D40)
-       - Anxiety -> GROUNDING GREEN (0xFF1B5E20)
-       - Sadness -> WARM AMBER (0xFF4E342E)
-       - Happy -> VIBRANT PURPLE (0xFF4A148C)
-       - Neutral -> Black (0xFF121212)
-    2. Generate a short Socratic question (max 10 words).
+    Analyze: "{text}"
+    1. Pick BACKGROUND color (Hex) to COUNTER-BALANCE emotion:
+       - Anger -> 0xFF004D40 (Teal)
+       - Anxiety -> 0xFF1B5E20 (Green)
+       - Sadness -> 0xFF4E342E (Warm Amber)
+       - Happy -> 0xFF4A148C (Purple)
+       - Neutral -> 0xFF121212 (Black)
+    2. Short Socratic question (max 8 words).
     Return JSON: {{ "color": "0xFF...", "nudge": "..." }}
     """
     try:
@@ -156,25 +168,24 @@ async def copilot_analysis(data: CopilotRequest):
     except:
         return {"color": "0xFF121212", "nudge": ""}
 
-# 4. TEMPORAL MAP (This is what was missing!)
+# --- TEMPORAL MAP (Context Anchor) ---
 @app.post("/temporal-context")
 async def temporal_context(data: TemporalRequest):
-    # Call OpenMeteo Historical Weather API
+    # OpenMeteo Historical Data
     url = f"https://archive-api.open-meteo.com/v1/archive?latitude={data.latitude}&longitude={data.longitude}&start_date={data.date}&end_date={data.date}&daily=weather_code"
     
     weather_desc = "Unknown"
     try:
-        res = requests.get(url).json()
+        res = requests.get(url, timeout=3).json()
         if 'daily' in res and 'weather_code' in res['daily']:
             code = res['daily']['weather_code'][0]
             weather_desc = get_weather_desc(code)
     except:
-        pass
+        pass # Fail silently to keep app fast
 
     prompt = f"""
-    User is writing a journal for past date: {data.date}.
-    Weather was: {weather_desc}.
-    Generate a 1-sentence prompt connecting weather to memory.
+    User journaling for date: {data.date}. Weather: {weather_desc}.
+    Generate 1-sentence prompt connecting weather/season to memory.
     """
     try:
         response = model.generate_content(prompt)
@@ -182,7 +193,7 @@ async def temporal_context(data: TemporalRequest):
     except:
         return {"weather": weather_desc, "prompt": "What do you remember?"}
 
-# 5. SAVE JOURNAL (With Date Support)
+# --- SAVE JOURNAL (With RLS User ID) ---
 @app.post("/save-journal")
 async def save_journal(entry: JournalEntry):
     try:
@@ -190,11 +201,13 @@ async def save_journal(entry: JournalEntry):
             "mood": entry.mood,
             "reflection": entry.reflection,
             "ai_tag": entry.ai_tag,
-            "image_url": entry.image_url
+            "image_url": entry.image_url,
+            "user_id": entry.user_id # <--- CRITICAL FOR SECURITY
         }
         
-        # If backdating
+        # Handle Backdating
         if entry.date:
+            # Convert "YYYY-MM-DD" to ISO Timestamp
             iso_date = f"{entry.date}T12:00:00Z"
             data["created_at"] = iso_date
 

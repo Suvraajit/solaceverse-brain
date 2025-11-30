@@ -441,7 +441,7 @@ class _HealScreenState extends State<HealScreen> with TickerProviderStateMixin {
   Future<void> _processInput() async {
     if (_controller.text.isEmpty) return;
     setState(() { _isLoading = true; _tag = ""; _nightStory = ""; _contentBody = ""; _imageUrl = ""; });
-    final baseUrl = 'http://192.168.137.1:8000'; 
+    final baseUrl = 'https://solaceverse-brain.onrender.com'; 
     try {
       if (_isNightShift) {
         final url = Uri.parse('$baseUrl/night-shift?text=${_controller.text}');
@@ -474,9 +474,9 @@ class _HealScreenState extends State<HealScreen> with TickerProviderStateMixin {
     final savedMood = _isNightShift ? "Night Shift: ${_controller.text}" : _controller.text;
     final savedTag = _isNightShift ? "Bedtime Story" : _tag;
     final savedReflect = _isNightShift ? _nightStory : _reflectionController.text; 
-    final url = Uri.parse('http://192.168.137.1:8000/save-journal');
+    final url = Uri.parse('https://solaceverse-brain.onrender.com/save-journal');
     try {
-      await http.post(url, headers: {"Content-Type": "application/json"}, body: jsonEncode({"mood": savedMood, "reflection": savedReflect, "ai_tag": savedTag, "image_url": _imageUrl}));
+      await http.post(url, headers: {"Content-Type": "application/json"}, body: jsonEncode({"mood": savedMood, "reflection": savedReflect, "ai_tag": savedTag, "image_url": _imageUrl, "user_id": user.id}));
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✨ Memory Sealed Forever"))); _reflectionController.clear();
     } catch (e) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to save."))); } finally { setState(() { _isSaving = false; }); }
   }
@@ -526,12 +526,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _deleteEntry(int id) async { try { await Supabase.instance.client.from('journal_entries').delete().eq('id', id); _fetchGlobalResonance(); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Memory Deleted."))); } catch (e) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not delete."))); } }
   String _formatDate(String dateString) { try { final date = DateTime.parse(dateString); final months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]; return "${months[date.month - 1]} ${date.day} • ${date.hour}:${date.minute.toString().padLeft(2, '0')}"; } catch (e) { return ""; } }
 
-  @override
+@override
   Widget build(BuildContext context) {
     if (_user != null) {
       final journalStream = Supabase.instance.client.from('journal_entries').stream(primaryKey: ['id']).order('created_at', ascending: false);
       return Scaffold(
-        // --- CHANGED: MULTI-FAB (Map + Quill) ---
         floatingActionButton: Column(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
@@ -540,13 +539,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
             FloatingActionButton(heroTag: "quill", backgroundColor: const Color(0xFFBB86FC), child: const Icon(Icons.edit, color: Colors.black), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CoPilotJournalScreen()))),
           ],
         ),
-        body: Stack(children: [Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF1A0B2E), Color(0xFF000000), Color(0xFF0D1B2A)]))), Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const SizedBox(height: 60), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("ECHO ARCHIVE", style: TextStyle(fontSize: 10, letterSpacing: 3, color: Colors.white.withOpacity(0.5))), const SizedBox(height: 5), Text(_user!.email!.split('@')[0].toUpperCase(), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w200, letterSpacing: 1, color: Colors.white))]), Row(children: [
-          IconButton(icon: const Icon(Icons.favorite, color: Colors.redAccent, size: 30), tooltip: "Collection", onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LikedContentScreen()))),
-          const SizedBox(width: 10),
-          StreamBuilder<List<Map<String, dynamic>>>(stream: journalStream, builder: (context, snapshot) { if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox(); return IconButton(icon: const Icon(Icons.play_circle_fill, color: Colors.white, size: 30), tooltip: "Time Travel", onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (context) => TimeTravelScreen(entries: snapshot.data!))); }); }), const SizedBox(width: 10), Container(height: 40, width: 40, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFBB86FC), Color(0xFF03DAC6)])), child: IconButton(icon: const Icon(Icons.logout, size: 15, color: Colors.black), onPressed: () async { await Supabase.instance.client.auth.signOut(); setState(() {}); }))])]), const SizedBox(height: 25), Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.white10)), child: Row(children: [const Icon(Icons.graphic_eq, color: Color(0xFF03DAC6), size: 20), const SizedBox(width: 15), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("GLOBAL RESONANCE", style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.5), letterSpacing: 1)), const SizedBox(height: 2), Text("$_totalResonance souls healing.", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white70))])])), 
-          const SizedBox(height: 20), const Text("PAST 7 DAYS", style: TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.white24)), const SizedBox(height: 10), 
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: List.generate(7, (index) { bool active = Random().nextBool(); Color boxColor = active ? [Colors.cyanAccent, Colors.purpleAccent, Colors.amberAccent, Colors.greenAccent][Random().nextInt(4)] : Colors.white10; return Container(width: 35, height: 35, decoration: BoxDecoration(color: boxColor.withOpacity(0.7), borderRadius: BorderRadius.circular(8), boxShadow: active ? [BoxShadow(color: boxColor.withOpacity(0.4), blurRadius: 8, spreadRadius: 1)] : [])); })), 
-          const SizedBox(height: 20), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [_buildFilterChip("All", Icons.grid_view), const SizedBox(width: 10), _buildFilterChip("Analysis", Icons.nightlight_round), const SizedBox(width: 10), _buildFilterChip("Journal", Icons.edit_note)])), const SizedBox(height: 20), Expanded(child: StreamBuilder<List<Map<String, dynamic>>>(stream: journalStream, builder: (context, snapshot) { if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.white10)); final allEntries = snapshot.data!; final visibleEntries = allEntries.where((entry) { if (_selectedFilter == "All") return true; if (_selectedFilter == "Journal") return entry['ai_tag'] == "Co-Pilot"; if (_selectedFilter == "Analysis") return entry['ai_tag'] != "Co-Pilot"; return true; }).toList(); if (visibleEntries.isEmpty) return Center(child: Text("No $_selectedFilter entries yet.", style: const TextStyle(color: Colors.white12))); return GridView.builder(gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 15, mainAxisSpacing: 15, childAspectRatio: 0.85), padding: const EdgeInsets.only(bottom: 120), itemCount: visibleEntries.length, itemBuilder: (context, index) { final entry = visibleEntries[index]; final entryId = entry['id'] as int; final isFlipped = _flippedCards.contains(entryId); final imageLink = entry['image_url']; final dateStr = _formatDate(entry['created_at']); bool isLocked = entry['ai_tag'].toString().startsWith("LOCKED"); if (isLocked && !isFlipped) { return GestureDetector(onTap: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("🔓 Time Capsule Unlocked"))); setState(() => _flippedCards.add(entryId)); }, child: Container(decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white12), image: const DecorationImage(image: NetworkImage("https://images.pexels.com/photos/1142950/pexels-photo-1142950.jpeg"), fit: BoxFit.cover, opacity: 0.6)), child: const Center(child: Icon(Icons.lock, color: Colors.white, size: 40)))); } return GestureDetector(onTap: () => setState(() => isFlipped ? _flippedCards.remove(entryId) : _flippedCards.add(entryId)), child: AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInOut, decoration: BoxDecoration(color: isFlipped ? Colors.white : const Color(0xFF1E1E1E).withOpacity(0.6), borderRadius: BorderRadius.circular(20), image: (!isFlipped && imageLink != null && imageLink.toString().isNotEmpty) ? DecorationImage(image: NetworkImage(imageLink), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.4), BlendMode.darken)) : null, border: Border.all(color: Colors.white.withOpacity(0.05))), child: Padding(padding: const EdgeInsets.all(15), child: isFlipped ? Center(child: SingleChildScrollView(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Icon(Icons.edit_note, color: Colors.black, size: 24), IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20), onPressed: () => _deleteEntry(entryId))]), const SizedBox(height: 5), Text(entry['reflection'] ?? "No reflection.", textAlign: TextAlign.center, style: const TextStyle(color: Colors.black, fontSize: 12, height: 1.5))]))) : Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(dateStr, style: const TextStyle(color: Colors.white54, fontSize: 10)), const SizedBox(height: 5), Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)), child: Text(entry['ai_tag'] ?? "Emotion", style: const TextStyle(color: Color(0xFFBB86FC), fontSize: 10, fontWeight: FontWeight.bold))), const SizedBox(height: 10), Text('"${entry['mood']}"', maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontStyle: FontStyle.italic))])))); }); }))]))]));
+        body: Stack(
+          children: [
+            Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF1A0B2E), Color(0xFF000000), Color(0xFF0D1B2A)]))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 60),
+                  // --- HEADER WITH OVERFLOW FIX ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // WRAPPED IN EXPANDED
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("ECHO ARCHIVE", style: TextStyle(fontSize: 10, letterSpacing: 3, color: Colors.white.withOpacity(0.5))),
+                            const SizedBox(height: 5),
+                            // NAME WITH ELLIPSIS
+                            Text(
+                              _user!.email!.split('@')[0].toUpperCase(), 
+                              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w200, letterSpacing: 1, color: Colors.white),
+                              overflow: TextOverflow.ellipsis, 
+                              maxLines: 1,
+                            )
+                          ],
+                        ),
+                      ),
+                      // ICONS ROW
+                      Row(
+                        children: [
+                          IconButton(icon: const Icon(Icons.favorite, color: Colors.redAccent, size: 30), tooltip: "Collection", onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LikedContentScreen()))),
+                          const SizedBox(width: 10),
+                          StreamBuilder<List<Map<String, dynamic>>>(stream: journalStream, builder: (context, snapshot) { if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox(); return IconButton(icon: const Icon(Icons.play_circle_fill, color: Colors.white, size: 30), tooltip: "Time Travel", onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (context) => TimeTravelScreen(entries: snapshot.data!))); }); }), 
+                          const SizedBox(width: 10), 
+                          Container(
+                            height: 40, width: 40, 
+                            decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFBB86FC), Color(0xFF03DAC6)])), 
+                            child: IconButton(icon: const Icon(Icons.logout, size: 15, color: Colors.black), onPressed: () async { await Supabase.instance.client.auth.signOut(); setState(() {}); })
+                          )
+                        ]
+                      )
+                    ],
+                  ),
+                  // --------------------------------
+                  const SizedBox(height: 25),
+                  Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.white10)), child: Row(children: [const Icon(Icons.graphic_eq, color: Color(0xFF03DAC6), size: 20), const SizedBox(width: 15), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("GLOBAL RESONANCE", style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.5), letterSpacing: 1)), const SizedBox(height: 2), Text("$_totalResonance souls healing.", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white70))])])),
+                  const SizedBox(height: 20), const Text("PAST 7 DAYS", style: TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.white24)), const SizedBox(height: 10),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: List.generate(7, (index) { bool active = Random().nextBool(); Color boxColor = active ? [Colors.cyanAccent, Colors.purpleAccent, Colors.amberAccent, Colors.greenAccent][Random().nextInt(4)] : Colors.white10; return Container(width: 35, height: 35, decoration: BoxDecoration(color: boxColor.withOpacity(0.7), borderRadius: BorderRadius.circular(8), boxShadow: active ? [BoxShadow(color: boxColor.withOpacity(0.4), blurRadius: 8, spreadRadius: 1)] : [])); })),
+                  const SizedBox(height: 20), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [_buildFilterChip("All", Icons.grid_view), const SizedBox(width: 10), _buildFilterChip("Analysis", Icons.nightlight_round), const SizedBox(width: 10), _buildFilterChip("Journal", Icons.edit_note)])), const SizedBox(height: 20),
+                  Expanded(child: StreamBuilder<List<Map<String, dynamic>>>(stream: journalStream, builder: (context, snapshot) { if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.white10)); final allEntries = snapshot.data!; final visibleEntries = allEntries.where((entry) { if (_selectedFilter == "All") return true; if (_selectedFilter == "Journal") return entry['ai_tag'] == "Co-Pilot"; if (_selectedFilter == "Analysis") return entry['ai_tag'] != "Co-Pilot"; return true; }).toList(); if (visibleEntries.isEmpty) return Center(child: Text("No $_selectedFilter entries yet.", style: const TextStyle(color: Colors.white12))); return GridView.builder(gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 15, mainAxisSpacing: 15, childAspectRatio: 0.85), padding: const EdgeInsets.only(bottom: 120), itemCount: visibleEntries.length, itemBuilder: (context, index) { final entry = visibleEntries[index]; final entryId = entry['id'] as int; final isFlipped = _flippedCards.contains(entryId); final imageLink = entry['image_url']; final dateStr = _formatDate(entry['created_at']); bool isLocked = entry['ai_tag'].toString().startsWith("LOCKED"); if (isLocked && !isFlipped) { return GestureDetector(onTap: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("🔓 Time Capsule Unlocked"))); setState(() => _flippedCards.add(entryId)); }, child: Container(decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white12), image: const DecorationImage(image: NetworkImage("https://images.pexels.com/photos/1142950/pexels-photo-1142950.jpeg"), fit: BoxFit.cover, opacity: 0.6)), child: const Center(child: Icon(Icons.lock, color: Colors.white, size: 40)))); } return GestureDetector(onTap: () => setState(() => isFlipped ? _flippedCards.remove(entryId) : _flippedCards.add(entryId)), child: AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInOut, decoration: BoxDecoration(color: isFlipped ? Colors.white : const Color(0xFF1E1E1E).withOpacity(0.6), borderRadius: BorderRadius.circular(20), image: (!isFlipped && imageLink != null && imageLink.toString().isNotEmpty) ? DecorationImage(image: NetworkImage(imageLink), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.4), BlendMode.darken)) : null, border: Border.all(color: Colors.white.withOpacity(0.05))), child: Padding(padding: const EdgeInsets.all(15), child: isFlipped ? Center(child: SingleChildScrollView(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Icon(Icons.edit_note, color: Colors.black, size: 24), IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20), onPressed: () => _deleteEntry(entryId))]), const SizedBox(height: 5), Text(entry['reflection'] ?? "No reflection.", textAlign: TextAlign.center, style: const TextStyle(color: Colors.black, fontSize: 12, height: 1.5))]))) : Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(dateStr, style: const TextStyle(color: Colors.white54, fontSize: 10)), const SizedBox(height: 5), Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)), child: Text(entry['ai_tag'] ?? "Emotion", style: const TextStyle(color: Color(0xFFBB86FC), fontSize: 10, fontWeight: FontWeight.bold))), const SizedBox(height: 10), Text('"${entry['mood']}"', maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontStyle: FontStyle.italic))])))); }); }))
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
     } else {
       return Scaffold(body: Padding(padding: const EdgeInsets.all(40), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(_isLoginMode ? "Welcome Back" : "Begin Journey", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w300)), const SizedBox(height: 40), TextField(controller: _emailController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Email", border: OutlineInputBorder())), const SizedBox(height: 20), TextField(controller: _passwordController, obscureText: true, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Password", border: OutlineInputBorder())), const SizedBox(height: 30), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _isLoading ? null : _authenticate, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBB86FC), foregroundColor: Colors.black), child: _isLoading ? const CircularProgressIndicator(color: Colors.black) : Text(_isLoginMode ? "OPEN VAULT" : "CREATE KEY"))), const SizedBox(height: 20), TextButton(onPressed: () => setState(() => _isLoginMode = !_isLoginMode), child: Text(_isLoginMode ? "First time? Create an account" : "Have a key? Log in", style: const TextStyle(color: Colors.white54)))])));
     }
@@ -575,8 +626,8 @@ class _CoPilotJournalScreenState extends State<CoPilotJournalScreen> {
   }
 
   void _onTextChanged(String text) { setState(() => _nudge = ""); if (_debounce?.isActive ?? false) _debounce!.cancel(); _debounce = Timer(const Duration(seconds: 3), () { _triggerCopilot(text); }); }
-  Future<void> _triggerCopilot(String text) async { if (text.length < 10) return; setState(() => _isThinking = true); try { final url = Uri.parse('http://192.168.137.1:8000/copilot'); final response = await http.post(url, headers: {"Content-Type": "application/json"}, body: jsonEncode({"text": text})); if (response.statusCode == 200) { final data = jsonDecode(response.body); setState(() { String hex = data['color'].toString().replaceAll("0x", ""); _backgroundColor = Color(int.parse(hex, radix: 16)); _nudge = data['nudge']; }); } } catch (e) {} finally { setState(() => _isThinking = false); } }
-  Future<void> _saveDeepJournal() async { if (_controller.text.isEmpty) return; final user = Supabase.instance.client.auth.currentUser; if (user == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("🔒 Login to Vault first!"))); return; } setState(() => _isSaving = true); try { final url = Uri.parse('http://192.168.137.1:8000/save-journal'); String dateStr = widget.backdate != null ? DateFormat('yyyy-MM-dd').format(widget.backdate!) : ""; await http.post(url, headers: {"Content-Type": "application/json"}, body: jsonEncode({"mood": _isTimeCapsule ? "Letter to Future" : "Deep Journaling", "reflection": _controller.text, "ai_tag": _isTimeCapsule ? "LOCKED: Open Later" : "Co-Pilot", "image_url": "https://images.pexels.com/photos/1762851/pexels-photo-1762851.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1", "date": dateStr})); if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_isTimeCapsule ? "🔒 Capsule Locked." : "✨ Journal Saved"))); Navigator.pop(context); } } catch (e) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to save."))); } finally { setState(() => _isSaving = false); } }
+  Future<void> _triggerCopilot(String text) async { if (text.length < 10) return; setState(() => _isThinking = true); try { final url = Uri.parse('https://solaceverse-brain.onrender.com/copilot'); final response = await http.post(url, headers: {"Content-Type": "application/json"}, body: jsonEncode({"text": text})); if (response.statusCode == 200) { final data = jsonDecode(response.body); setState(() { String hex = data['color'].toString().replaceAll("0x", ""); _backgroundColor = Color(int.parse(hex, radix: 16)); _nudge = data['nudge']; }); } } catch (e) {} finally { setState(() => _isThinking = false); } }
+  Future<void> _saveDeepJournal() async { if (_controller.text.isEmpty) return; final user = Supabase.instance.client.auth.currentUser; if (user == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("🔒 Login to Vault first!"))); return; } setState(() => _isSaving = true); try { final url = Uri.parse('https://solaceverse-brain.onrender.com/save-journal'); String dateStr = widget.backdate != null ? DateFormat('yyyy-MM-dd').format(widget.backdate!) : ""; await http.post(url, headers: {"Content-Type": "application/json"}, body: jsonEncode({"mood": _isTimeCapsule ? "Letter to Future" : "Deep Journaling", "reflection": _controller.text, "ai_tag": _isTimeCapsule ? "LOCKED: Open Later" : "Co-Pilot", "image_url": "https://images.pexels.com/photos/1762851/pexels-photo-1762851.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1", "date": dateStr, "user_id": user.id})); if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_isTimeCapsule ? "🔒 Capsule Locked." : "✨ Journal Saved"))); Navigator.pop(context); } } catch (e) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to save."))); } finally { setState(() => _isSaving = false); } }
   @override
   void dispose() { _debounce?.cancel(); super.dispose(); }
   @override
@@ -695,7 +746,7 @@ class _TemporalMapScreenState extends State<TemporalMapScreen> {
     // 3. FETCH CONTEXT (Using whatever lat/long we have)
     String weatherPrompt = "What happened this day?";
     try {
-      final url = Uri.parse('http://192.168.137.1:8000/temporal-context'); // UPDATE IP HERE IF ON PHONE
+      final url = Uri.parse('https://solaceverse-brain.onrender.com/temporal-context'); // UPDATE IP HERE IF ON PHONE
       final response = await http.post(
         url, 
         headers: {"Content-Type": "application/json"}, 
