@@ -4,6 +4,7 @@ import requests
 import random
 from datetime import datetime
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import google.generativeai as genai
 from supabase import create_client, Client
@@ -24,6 +25,13 @@ model = genai.GenerativeModel('gemini-2.5-flash') # Flash is fastest for real-ti
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all websites (including your Netlify app)
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allows all headers
+)
 
 # ==========================================
 # 2. DATA MODELS (Strict Typing)
